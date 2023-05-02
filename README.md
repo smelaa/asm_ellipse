@@ -4,7 +4,7 @@ Proszę napisać program uruchamiany z parametrami będącymi dwiema liczbami ca
 \
 Przykłady wywołania programu:\
 program2 150 40\
-program2 200 120\
+program2 200 120
 
 ## Pliki projektu i sposób uruchomienia
 Pliki: DOSXNT.386, DOSXNT.EXT, LINK.EXE, ML.ERR, ML.EXE to pliki kompilatora.\

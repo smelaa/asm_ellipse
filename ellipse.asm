@@ -1,8 +1,9 @@
 dane1 segment
-X     db 0 ;oś pozioma elipsy
-Y     db 0 ;oś pionowa elipsy
+X_start     db 0 ;oś pozioma elipsy
+Y_start     db 0 ;oś pionowa elipsy
 
-err1 db 'Blad danych wejsciowych! X i Y powinny zawierac sie w przedziale (0,200).$'
+k1          db 0 ;oś pionowa elipsy
+err1        db 'Blad danych wejsciowych! X i Y powinny zawierac sie w przedziale (0,200).$'
 
 dane1 ends
 
@@ -14,14 +15,80 @@ start1:
 	mov	ss, ax 
 	mov	sp, offset wstos1 
 
+    ;PARSOAWANIE ARGUMENTÓW
     mov ax, seg dane1
     mov es, ax
     mov si, 082h                                    ;wrzucam offset, gdzie znajduje się wywołanie z linii komend
-    mov di, offset X                                ;do di wrzucam offset zmiennej do której chce sparsować pierwszy argument z linii komend
+    mov di, offset X_start                          ;do di wrzucam offset zmiennej do której chce sparsować pierwszy argument z linii komend
     call atoi                                       ;parsuje pierwszy argument
-    mov di, offset Y                                ;do di wrzucam offset zmiennej do której chce sparsować drugi argument z linii komend
+    mov di, offset Y_start                          ;do di wrzucam offset zmiennej do której chce sparsować drugi argument z linii komend
     call atoi                                       ;parsuje drugi argument
 
+    mov ax, seg dane1                               ;do ds wrzuć segment danych
+    mov ds, ax 
+
+    mov al, byte ptr ds:[X_start]                   ;do X wrzuć sparsowany X_start
+    xor ah, ah
+    mov word ptr cs:[osX], ax
+
+    mov al, byte ptr ds:[Y_start]                   ;do Y wrzuć sparsowany Y_start
+    xor ah, ah
+    mov word ptr cs:[osY], ax
+
+    ;TRYB GRAFICZNY
+    mov al, 13h ;320x200 256 kolorów
+	mov ah, 0 
+	int 10h 
+
+    mov byte ptr cs:[k], 10                         ;do k przypisany losowy kolor początkowy
+
+    inf_p: 
+        in al, 60h                                  ;60h to kod klawiatury - wrzucam kod klawisza do al  
+        cmp al, 1                                   ;1 - ESC -> zakońćz program
+        je chg_txt
+
+        cmp al, byte ptr ds:[k1]                    ;jesli klawisz był już obsłużony to nie obsługuj znowu
+        je inf_p
+        mov byte ptr ds:[k1], al                    ;zapisz ze byl juz obslugiwany
+        
+        p1:
+            cmp al, 75                              ;75 - LEFT -> zmniejsz X
+            jne p2
+
+            dec byte ptr cs:[osX]
+            jmp p_dr
+        p2: 
+            cmp al, 77                              ;77 - RIGHT -> zwiększ X
+            jne p3
+
+            inc byte ptr cs:[osX]
+            jmp p_dr
+        p3: 
+            cmp al, 72                              ;72 - UP -> zwiększ Y
+            jne p4
+
+            inc byte ptr cs:[osY]
+            jmp p_dr
+        p4: 
+            cmp al, 80                              ;80 - DOWN -> zmniejsz Y
+            jne pdiff
+
+            dec byte ptr cs:[osY]
+            jmp p_dr
+        pdiff:                                      ;37 - ALT+K -> zmień kolor
+            cmp al, 37                             
+            jne p_dr
+
+            inc byte ptr cs:[k]
+        p_dr:
+            call narysuj_elipse
+            jmp inf_p
+
+	;TRYB TEKSTOWY
+    chg_txt:
+        mov al, 3h
+        mov ah, 0 
+        int 10h 
 
     koniec:
         mov al,0                                    ;przerwanie, koniec programu
@@ -59,7 +126,7 @@ atoi:                                               ;funkcja konwertuje string s
 
     p1_atoi:                                        ;petla przestaje się wykonywać jeśli skończą się cyfry
         cmp cx, 3                                   ;dane wejsciowe moga zawierac maksymalnie 3 cyfry
-        ;jg blad_danych                     
+        jg blad_danych                     
         
         cmp bl, 48                                  ;jesli wczytany znak nie jest cyfrą to wracam
         jl powrot_atoi
@@ -97,7 +164,38 @@ atoi:                                               ;funkcja konwertuje string s
         ret
 
 ;====================================
+;obiekt: elipsa
+osX   dw ?
+osY   dw ?
+;............
+narysuj_elipse:
+    mov ax, word ptr cs:[osX]
+    mov word ptr cs:[X], ax
+    mov ax, word ptr cs:[osY]
+    mov word ptr cs:[Y], ax
+    call zapal_punkt
+    ret
+;====================================
+;obiekt: punkt
+X   dw ?
+Y   dw ?
+k   db ?
+;............
+zapal_punkt:
+    mov ax, 0a000h                                  ;adres pamięci obrazu
+    mov es, ax                                      
 
+    mov ax, word ptr cs:[Y]                         ;ax=320*Y
+    mov bx, 320
+    mul bx 
+
+    mov bx, word ptr cs:[X]                         ;bx=ax+X=320*Y+X
+    add bx, ax 
+
+    mov al, byte ptr cs:[k]                         ;al=numer koloru k
+    mov byte ptr es:[bx], al                        ;do komórki o adresie bx przypisz kolor k
+    ret
+;====================================
 
 code1 ends
 
