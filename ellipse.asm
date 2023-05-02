@@ -43,53 +43,56 @@ blad_danych:
 ;es:[di] - adres zmiennej w której należy przechować string zparsowany do inta [result]
 ;ds:[si] - adres pierwszego znaku liczby w formacie string 
 atoi:                                               ;funkcja konwertuje string spod adresu ds:[si] do es:[di]
-    mov byte ptr es:[di], 0                         ;zerowanie result
+    xor bh, bh                                      ;zerowanie rejestru w ktorym bedzie result
     
     xor cx, cx                                      ;zerowanie licznika cx (licznik cx liczy liczbę przeczytanych cyfr)
 
-    mov bh, byte ptr ds:[si]                        ;do bh wrzucam kod ascii pierwszego znaku
+    mov bl, byte ptr ds:[si]                        ;do bh wrzucam kod ascii pierwszego znaku
     
     trim_spaces:                                    ;petla przesuwa offset stringa na pierwszy znak który nie jest spacją
-        cmp bh, 32                                  ;jesli wczytany znak nie jest spacją to zaczynam wczytywać cyfry
+        cmp bl, 32                                  ;jesli wczytany znak nie jest spacją to zaczynam wczytywać cyfry
         jne p1_atoi
 
         inc si                                      ;przesuwam offset na kolejny znak stringa
-
-        mov bh, byte ptr ds:[si]                    ;do bh wrzucam kod ascii kolejnego znaku
+        mov bl, byte ptr ds:[si]                    ;do bh wrzucam kod ascii kolejnego znaku
         jmp trim_spaces
 
     p1_atoi:                                        ;petla przestaje się wykonywać jeśli skończą się cyfry
         cmp cx, 3                                   ;dane wejsciowe moga zawierac maksymalnie 3 cyfry
-        jg blad_danych                     
+        ;jg blad_danych                     
         
-        cmp bh, 48                                  ;jesli wczytany znak nie jest cyfrą to wracam
-        jb powrot_atoi
-        cmp bh, 57
+        cmp bl, 48                                  ;jesli wczytany znak nie jest cyfrą to wracam
+        jl powrot_atoi
+        cmp bl, 57
         jg powrot_atoi
 
         inc cx                                      ;inkrementacja licznika wczytanych cyfr
 
-        sub bh, 48                                  ;konwersja z char na int
+        sub bl, 48                                  ;konwersja z char na int
 
         mov al, 10                                  ;mnozenie result przez 10
-        mul byte ptr es:[di]
+        mul bh
 
-        add byte ptr es:[di], bh                    ;dodanie kolejnej cyfry
+        xor bh, bh                                  ;w ax - wynik mnozenia, do ktorego dodaje aktualna cyfre z bl
+        add ax, bx
+
+        cmp ax, 200                                 ;jesli wykraczmy poza przedzial - wypisuje blad
+        jge blad_danych
+
+        mov bh, al                                  ;do bh przypisuje aktualnie zparsowany wynik
 
         inc si                                      ;przesuwam offset na kolejny znak stringa
-
-        mov bh, byte ptr ds:[si]                    ;do ah wrzucam kod ascii kolejnego znaku
-
+        mov bl, byte ptr ds:[si]                    ;do ah wrzucam kod ascii kolejnego znaku
         jmp p1_atoi
 
     powrot_atoi: 
         cmp cx, 0
         je blad_danych                              ;jesli wczytane dane maja 0 cyfr - blad danych wejsciowych
 
-        cmp byte ptr es:[di], 0                     ;jesli wczytana liczba nie miesci sie w przedziale - blad danych wejsciowych
-        jng blad_danych  
-        cmp byte ptr es:[di], 200
-        jnb blad_danych  
+        cmp bh, 0                                   ;jesli dane wychodza poza przedzial - blad danych (>=200 sprawdzone w kodzie wyżej)
+        je blad_danych 
+
+        mov byte ptr es:[di] , bh                   ;do miejsca z pamięcią wrzucam obliczony wynik
 
         ret
 
