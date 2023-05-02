@@ -162,18 +162,78 @@ atoi:                                               ;funkcja konwertuje string s
         mov byte ptr es:[di] , bh                   ;do miejsca z pamięcią wrzucam obliczony wynik
 
         ret
+;====================================
+clean_screen:
+    mov ax, 0a000h                                  ;adres pamięci obrazu
+    mov es, ax  
 
+    mov di, 0                                       ;do di pierwszy adres komorki pamieci obrazu
+    mov cx, 64000                                   ;cx - ile razy ma powtorzyc zeby wyczyscic ekran
+    mov al, 200                                     ;al - wartosc czyszcząca ekran (tutaj taki fioletowawy)
+    cld
+    rep stosb
+
+    ret
 ;====================================
 ;obiekt: elipsa
 osX   dw ?
 osY   dw ?
+rob   dw ? ;zmienna robocza, nie trzeba okreslac wartosci
+dwa   dw 2 ;zmienna robocza, nie trzeba okreslac wartosci
 ;............
 narysuj_elipse:
-    mov ax, word ptr cs:[osX]
-    mov word ptr cs:[X], ax
+    call clean_screen
+    mov cx, word ptr cs:[osX]                       ;oblicz liczbę pikseli do zaświecenia
     mov ax, word ptr cs:[osY]
-    mov word ptr cs:[Y], ax
-    call zapal_punkt
+    add ax, cx                                      ;dodaj do ax sume osX+osY
+    mov cx, 2                                       
+    mul cx                                          ;pomnoz przez pewną gęstość
+    mov cx, ax                                      ;zapisz osiągniętą wartość do cx
+    mov dx, ax                                      ;zaladuj ją też do dx
+
+    finit                                           ;zainicjuj jednostke zmiennoprzecinkową
+
+    ;równanie parametryczne elipsy:
+    ;x=a*cos(t)
+    ;y=b*sin(t)
+    ;0<=t<2pi
+
+    pkt_el: push cx
+        mov word ptr cs:[rob], cx
+        fild word ptr cs:[rob]                      ;policz t
+        mov word ptr cs:[rob], dx
+        fidiv word ptr cs:[rob] 
+        fldpi
+        fimul word ptr cs:[dwa] 
+        fmul
+        fcos                                        ;policz cos(t)
+        fimul word ptr cs:[osX]                     ;pomnoz przez dlugosc polosi
+        fidiv word ptr cs:[dwa] 
+        mov word ptr cs:[rob], 160
+        fiadd word ptr cs:[rob]                     ;przesunięcie na środek
+        fist word ptr cs:[X]                        ;ściągnij wartość do X
+
+        mov word ptr cs:[rob], cx
+        fild word ptr cs:[rob]                      ;policz t
+        mov word ptr cs:[rob], dx
+        fidiv word ptr cs:[rob] 
+        fldpi
+        fimul word ptr cs:[dwa] 
+        fmul
+        fcos                                        ;policz sin(t)
+        fimul word ptr cs:[osY]                     ;pomnoz przez dlugosc polosi
+        fidiv word ptr cs:[dwa] 
+        mov word ptr cs:[rob], 100
+        fiadd word ptr cs:[rob]                     ;przesunięcie na środek
+        fist word ptr cs:[Y]                        ;ściągnij wartość do Y
+
+        call zapal_punkt
+
+        pop cx 
+        ;loop pkt_el - A2075 to far by 15 bytes
+        dec cx 
+        cmp cx, 0
+        jnz pkt_el
     ret
 ;====================================
 ;obiekt: punkt
