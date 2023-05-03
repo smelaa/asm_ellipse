@@ -28,11 +28,17 @@ start1:
     mov ax, seg dane1                               ;do ds wrzuć segment danych
     mov ds, ax 
 
-    mov al, byte ptr ds:[X_start]                   ;do X wrzuć sparsowany X_start
+    mov al, byte ptr ds:[X_start]                   ;do osX wrzuć polowe sparsowanego X_start
+    xor ah, ah
+    mov bl, 2
+    div bl
     xor ah, ah
     mov word ptr cs:[osX], ax
 
-    mov al, byte ptr ds:[Y_start]                   ;do Y wrzuć sparsowany Y_start
+    mov al, byte ptr ds:[Y_start]                   ;do osY wrzuć polowe sparsowanego Y_start
+    xor ah, ah
+    mov bl, 2
+    div bl
     xor ah, ah
     mov word ptr cs:[osY], ax
 
@@ -42,6 +48,7 @@ start1:
 	int 10h 
 
     mov byte ptr cs:[k], 10                         ;do k przypisany losowy kolor początkowy
+    call narysuj_elipse
 
     inf_p: 
         in al, 60h                                  ;60h to kod klawiatury - wrzucam kod klawisza do al  
@@ -78,10 +85,11 @@ start1:
             jmp p_dr
         pdiff:                                      ;37 - ALT+K -> zmień kolor
             cmp al, 37                             
-            jne p_dr
+            jne inf_p
 
             inc byte ptr cs:[k]
         p_dr:
+            call set_bnd
             call narysuj_elipse
             jmp inf_p
 
@@ -177,71 +185,92 @@ clean_screen:
     ret
 ;====================================
 ;obiekt: elipsa
-osX   dw ?
-osY   dw ?
-rob   dw ? ;zmienna robocza, nie trzeba okreslac wartosci
-dwa   dw 2 ;zmienna robocza, nie trzeba okreslac wartosci
+osX   dw ? ;polos pozioma
+osY   dw ? ;polos pionowa
 ;............
 narysuj_elipse:
     call clean_screen
-    mov cx, word ptr cs:[osX]                       ;oblicz liczbę pikseli do zaświecenia
+    mov word ptr cs:[corrX], 0
+    mov ax, word ptr cs:[osX]
+    sub word ptr cs:[corrX], ax
+    mov word ptr cs:[corrY], 0
     mov ax, word ptr cs:[osY]
-    add ax, cx                                      ;dodaj do ax sume osX+osY
-    mov cx, 2                                       
-    mul cx                                          ;pomnoz przez pewną gęstość
-    mov cx, ax                                      ;zapisz osiągniętą wartość do cx
-    mov dx, ax                                      ;zaladuj ją też do dx
+    sub word ptr cs:[corrY], ax
 
-    finit                                           ;zainicjuj jednostke zmiennoprzecinkową
-
-    ;równanie parametryczne elipsy:
-    ;x=a*cos(t)
-    ;y=b*sin(t)
-    ;0<=t<2pi
-
-    pkt_el: push cx
-        mov word ptr cs:[rob], cx
-        fild word ptr cs:[rob]                      ;policz t
-        mov word ptr cs:[rob], dx
-        fidiv word ptr cs:[rob] 
-        fldpi
-        fimul word ptr cs:[dwa] 
-        fmul
-
-        fcos                                        ;policz cos(t)
-        fimul word ptr cs:[osX]                     ;pomnoz przez dlugosc polosi
-        fidiv word ptr cs:[dwa] 
-
-        mov word ptr cs:[rob], 160
-        fiadd word ptr cs:[rob]                     ;przesunięcie na środek
-
-        fist word ptr cs:[X]                        ;ściągnij wartość do X
-
-        mov word ptr cs:[rob], cx
-        fild word ptr cs:[rob]                      ;policz t
-        mov word ptr cs:[rob], dx
-        fidiv word ptr cs:[rob] 
-        fldpi
-        fimul word ptr cs:[dwa] 
-        fmul
-
-        fsin                                        ;policz sin(t)
-        fimul word ptr cs:[osY]                     ;pomnoz przez dlugosc polosi
-        fidiv word ptr cs:[dwa] 
-
-        mov word ptr cs:[rob], 100
-        fiadd word ptr cs:[rob]                     ;przesunięcie na środek
-
-        fist word ptr cs:[Y]                        ;ściągnij wartość do Y
-
-        call zapal_punkt
-
-        pop cx 
-        ;loop pkt_el - A2075 to far by 15 bytes
-        dec cx 
-        cmp cx, 0
-        jnz pkt_el
+    mov cx, word ptr cs:[osX]
+    add cx, word ptr cs:[osX]
+    p1_e: push cx
+        mov cx, word ptr cs:[osY]
+        add cx, word ptr cs:[osY]
+        p2_e: push cx 
+            call chk_pkt
+            inc word ptr cs:[corrY]
+            pop cx 
+            loop p2_e
+        mov word ptr cs:[corrY], 0
+        mov ax, word ptr cs:[osY]
+        sub word ptr cs:[corrY], ax
+        inc word ptr cs:[corrX]
+        pop cx
+        loop p1_e
     ret
+
+;............
+corrX  dw ? ;wspol X elipsy
+corrY  dw ? ;wspol Y elipsy
+rob  dw ? ;zmienna robicza
+chk_pkt:
+    finit
+    ;x^2/a^2+y^2/b^2<=1
+    fild word ptr cs:[corrX]
+    fimul word ptr cs:[corrX]
+    fidiv word ptr cs:[osX]
+    fidiv word ptr cs:[osX]
+
+    fild word ptr cs:[corrY]
+    fimul word ptr cs:[corrY]
+    fidiv word ptr cs:[osY]
+    fidiv word ptr cs:[osY]
+
+    fadd
+
+    fist word ptr cs:[rob]
+
+    cmp word ptr cs:[rob], 1
+    jg chk_cmb
+
+    call oblicz_i_zapal
+
+    chk_cmb: ret
+oblicz_i_zapal:
+    mov ax, word ptr cs:[corrX]
+    add ax, 160
+    mov word ptr cs:[X], ax
+
+    mov ax, word ptr cs:[corrY]
+    add ax, 100
+    mov word ptr cs:[Y], ax
+
+    call zapal_punkt
+    ret
+;............
+set_bnd:
+    cmp word ptr cs:[osX], 160
+    jl sb_2
+    mov word ptr cs:[osX], 159
+    sb_2: 
+        cmp word ptr cs:[osY], 100
+        jl sb_3
+        mov word ptr cs:[osY], 99
+    sb_3: 
+        cmp word ptr cs:[osX], 0
+        jg sb_4
+        mov word ptr cs:[osX], 1
+    sb_4: 
+        cmp word ptr cs:[osY], 0
+        jg sb_cmb
+        mov word ptr cs:[osY], 1
+    sb_cmb: ret
 ;====================================
 ;obiekt: punkt
 X   dw ?
