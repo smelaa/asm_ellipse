@@ -1,3 +1,4 @@
+.387 ;dyrektywa informujaca o zmiennym przecinku 
 dane1 segment
 X_start     db 0 ;oś pozioma elipsy
 Y_start     db 0 ;oś pionowa elipsy
@@ -206,11 +207,14 @@ narysuj_elipse:
         fldpi
         fimul word ptr cs:[dwa] 
         fmul
+
         fcos                                        ;policz cos(t)
         fimul word ptr cs:[osX]                     ;pomnoz przez dlugosc polosi
         fidiv word ptr cs:[dwa] 
+
         mov word ptr cs:[rob], 160
         fiadd word ptr cs:[rob]                     ;przesunięcie na środek
+
         fist word ptr cs:[X]                        ;ściągnij wartość do X
 
         mov word ptr cs:[rob], cx
@@ -220,11 +224,14 @@ narysuj_elipse:
         fldpi
         fimul word ptr cs:[dwa] 
         fmul
-        fcos                                        ;policz sin(t)
+
+        fsin                                        ;policz sin(t)
         fimul word ptr cs:[osY]                     ;pomnoz przez dlugosc polosi
         fidiv word ptr cs:[dwa] 
+
         mov word ptr cs:[rob], 100
         fiadd word ptr cs:[rob]                     ;przesunięcie na środek
+
         fist word ptr cs:[Y]                        ;ściągnij wartość do Y
 
         call zapal_punkt
