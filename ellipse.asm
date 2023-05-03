@@ -3,7 +3,7 @@ dane1 segment
 X_start     db 0 ;oś pozioma elipsy
 Y_start     db 0 ;oś pionowa elipsy
 
-k1          db 0 ;oś pionowa elipsy
+k1          db 0 ;kod ostatniego klawisza
 err1        db 'Blad danych wejsciowych! X i Y powinny zawierac sie w przedziale (0,200).$'
 
 dane1 ends
@@ -47,9 +47,11 @@ start1:
 	mov ah, 0 
 	int 10h 
 
-    mov byte ptr cs:[k], 10                         ;do k przypisany losowy kolor początkowy
+    mov byte ptr cs:[ke], 13                         ;do ke przypisany losowy kolor początkowy elipsy
+    mov byte ptr cs:[kb], 0                          ;do kb przypisany losowy kolor początkowy tła
     call narysuj_elipse
 
+    ;OBSŁUGA PRZYCISKÓW
     inf_p: 
         in al, 60h                                  ;60h to kod klawiatury - wrzucam kod klawisza do al  
         cmp al, 1                                   ;1 - ESC -> zakońćz program
@@ -79,15 +81,21 @@ start1:
             jmp p_dr
         p4: 
             cmp al, 80                              ;80 - DOWN -> zmniejsz Y
-            jne pdiff
+            jne pk
 
             dec byte ptr cs:[osY]
             jmp p_dr
-        pdiff:                                      ;37 - ALT+K -> zmień kolor
+        pk:                                         ;37 - ALT+K -> zmień kolor
             cmp al, 37                             
+            jne pb
+
+            inc byte ptr cs:[ke]
+            jmp p_dr
+        pb:                                         ;48 - ALT+B -> zmień kolor tla
+            cmp al, 48                             
             jne inf_p
 
-            inc byte ptr cs:[k]
+            inc byte ptr cs:[kb]
         p_dr:
             call set_bnd
             call narysuj_elipse
@@ -153,7 +161,7 @@ atoi:                                               ;funkcja konwertuje string s
         add ax, bx
 
         cmp ax, 200                                 ;jesli wykraczmy poza przedzial - wypisuje blad
-        jge blad_danych
+        jg blad_danych
 
         mov bh, al                                  ;do bh przypisuje aktualnie zparsowany wynik
 
@@ -172,13 +180,14 @@ atoi:                                               ;funkcja konwertuje string s
 
         ret
 ;====================================
-clean_screen:
+kb   db ? ;kolor tła
+clean_screen:                                       ;funkcja czyści ekran
     mov ax, 0a000h                                  ;adres pamięci obrazu
     mov es, ax  
 
     mov di, 0                                       ;do di pierwszy adres komorki pamieci obrazu
     mov cx, 64000                                   ;cx - ile razy ma powtorzyc zeby wyczyscic ekran
-    mov al, 200                                     ;al - wartosc czyszcząca ekran (tutaj taki fioletowawy)
+    mov al, byte ptr cs:[kb]                        ;al - wkolor tla
     cld
     rep stosb
 
@@ -190,83 +199,117 @@ osY   dw ? ;polos pionowa
 ;............
 narysuj_elipse:
     call clean_screen
-    mov word ptr cs:[corrX], 0
-    mov ax, word ptr cs:[osX]
-    sub word ptr cs:[corrX], ax
-    mov word ptr cs:[corrY], 0
-    mov ax, word ptr cs:[osY]
-    sub word ptr cs:[corrY], ax
-
-    mov cx, word ptr cs:[osX]
-    add cx, word ptr cs:[osX]
-    p1_e: push cx
+    mov cx, word ptr cs:[osY]
+    ;cmp word ptr cs:[osX], cx 
+    ;jl od_Y
+    od_X:
+        mov cx, word ptr cs:[osX]
+        p_odX: push cx 
+            mov word ptr cs:[X], cx 
+            mov word ptr cs:[setX], cx 
+            mov ax, word ptr cs:[osX]
+            mov word ptr cs:[a], ax 
+            mov ax, word ptr cs:[osY]
+            mov word ptr cs:[b], ax 
+            call ustal_pkt
+            mov ax, word ptr cs:[setY]
+            mov word ptr cs:[Y], ax 
+            call odbij_zapal_pkt
+            pop cx
+            loop p_odX 
+    od_Y:
         mov cx, word ptr cs:[osY]
-        add cx, word ptr cs:[osY]
-        p2_e: push cx 
-            call chk_pkt
-            inc word ptr cs:[corrY]
-            pop cx 
-            loop p2_e
-        mov word ptr cs:[corrY], 0
-        mov ax, word ptr cs:[osY]
-        sub word ptr cs:[corrY], ax
-        inc word ptr cs:[corrX]
-        pop cx
-        loop p1_e
-    ret
+        p_odY: push cx 
+            mov word ptr cs:[Y], cx 
+            mov word ptr cs:[setX], cx 
+            mov ax, word ptr cs:[osY]
+            mov word ptr cs:[a], ax 
+            mov ax, word ptr cs:[osX]
+            mov word ptr cs:[b], ax 
+            call ustal_pkt
+            mov ax, word ptr cs:[setY]
+            mov word ptr cs:[X], ax 
+            call odbij_zapal_pkt
+            pop cx
+            loop p_odY
+        ret
 
+;..........................
+setX   dw ? ;wyliczana zmienna
+setY   dw ? ;zmienna służącą do wyliczenia
+a      dw ? ;półoś zgodna z wsp wyliczaną
+b      dw ? ;druga półoś
 ;............
-corrX  dw ? ;wspol X elipsy
-corrY  dw ? ;wspol Y elipsy
-rob  dw ? ;zmienna robicza
-chk_pkt:
+ustal_pkt:                                          ;ustala punkt (x,y)=(x, sqrt((1-x^2/a^2)b^2))
     finit
-    ;x^2/a^2+y^2/b^2<=1
-    fild word ptr cs:[corrX]
-    fimul word ptr cs:[corrX]
-    fidiv word ptr cs:[osX]
-    fidiv word ptr cs:[osX]
+    fild word ptr cs:[setX]                         ;x
+    fimul word ptr cs:[setX]                        ;x^2
+    fidiv word ptr cs:[a]                           ;x^2/a
+    fidiv word ptr cs:[a]                           ;x^2/a^2
+    fld1     
+    fsub                                            ;x^2/a^2-1
+    fchs                                            ;1-x^2/a^2
+    fimul word ptr cs:[b]                           ;(1-x^2/a^2)b
+    fimul word ptr cs:[b]                           ;(1-x^2/a^2)b^2
+    fsqrt
 
-    fild word ptr cs:[corrY]
-    fimul word ptr cs:[corrY]
-    fidiv word ptr cs:[osY]
-    fidiv word ptr cs:[osY]
+    fist word ptr cs:[setY]                         ;zapisz wynik do setY
+    ret
+;..........................
+;parametry: X, Y
+odbij_zapal_pkt:                                    ;narysuj punkt w 4 ćwiartkach symetrycznie
+    call przenies_zapal_pkt                         ;(X, Y)
 
-    fadd
+    xor ax, ax
+    sub ax, word ptr cs:[X] 
+    mov word ptr cs:[X], ax
+    call przenies_zapal_pkt                         ;(-X, Y)
 
-    fist word ptr cs:[rob]
+    xor ax, ax
+    sub ax, word ptr cs:[Y] 
+    mov word ptr cs:[Y], ax
+    call przenies_zapal_pkt                         ;(-X, -Y)
 
-    cmp word ptr cs:[rob], 1
-    jg chk_cmb
+    xor ax, ax
+    sub ax, word ptr cs:[X] 
+    mov word ptr cs:[X], ax
+    call przenies_zapal_pkt                         ;(X, -Y)
 
-    call oblicz_i_zapal
-
-    chk_cmb: ret
-oblicz_i_zapal:
-    mov ax, word ptr cs:[corrX]
+    ret
+;..........................
+;parametry: X, Y
+przenies_zapal_pkt:                                 ;przenies na srodek ekranu
+    push word ptr cs:[X] 
+    push word ptr cs:[Y] 
+    
+    mov ax, word ptr cs:[X]     
     add ax, 160
     mov word ptr cs:[X], ax
 
-    mov ax, word ptr cs:[corrY]
+    mov ax, word ptr cs:[Y]
     add ax, 100
     mov word ptr cs:[Y], ax
 
     call zapal_punkt
+
+    pop word ptr cs:[Y] 
+    pop word ptr cs:[X] 
+
     ret
-;............
-set_bnd:
-    cmp word ptr cs:[osX], 160
+;====================================
+set_bnd:                                            ;funkcja dbająca o to by wartości osi nie wykraczyły poza to co mieści się na ekranie
+    cmp word ptr cs:[osX], 160                      ;X overflow
     jl sb_2
     mov word ptr cs:[osX], 159
-    sb_2: 
+    sb_2:                                           ;Y overflow
         cmp word ptr cs:[osY], 100
         jl sb_3
         mov word ptr cs:[osY], 99
-    sb_3: 
+    sb_3:                                           ;X underflow
         cmp word ptr cs:[osX], 0
         jg sb_4
         mov word ptr cs:[osX], 1
-    sb_4: 
+    sb_4:                                           ;Y underflow
         cmp word ptr cs:[osY], 0
         jg sb_cmb
         mov word ptr cs:[osY], 1
@@ -275,9 +318,9 @@ set_bnd:
 ;obiekt: punkt
 X   dw ?
 Y   dw ?
-k   db ?
-;............
-zapal_punkt:
+ke   db ?
+;..........................
+zapal_punkt:                                        ;funkcja zapala punkt o danych wsp x i y
     mov ax, 0a000h                                  ;adres pamięci obrazu
     mov es, ax                                      
 
@@ -288,7 +331,7 @@ zapal_punkt:
     mov bx, word ptr cs:[X]                         ;bx=ax+X=320*Y+X
     add bx, ax 
 
-    mov al, byte ptr cs:[k]                         ;al=numer koloru k
+    mov al, byte ptr cs:[ke]                         ;al=numer koloru k
     mov byte ptr es:[bx], al                        ;do komórki o adresie bx przypisz kolor k
     ret
 ;====================================
