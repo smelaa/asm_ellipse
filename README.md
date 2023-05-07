@@ -9,7 +9,7 @@ program2 200 120
 ## Pliki projektu i sposób uruchomienia
 Pliki: DOSXNT.386, DOSXNT.EXT, LINK.EXE, ML.ERR, ML.EXE to pliki kompilatora.\
 Plik TD.EXE to plik debuggera.\
-Plik ellipse.asm to napisany program (in progress).\
+Plik ellipse.asm to napisany program.\
 \
 Aby go uruchomić należy pobrać i uruchomić DOSBoxa, wejść do odpowiedniego katalogu i wywołać następujące polecenia:\
 ml ellipse.asm\
